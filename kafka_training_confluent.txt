@@ -1,0 +1,587 @@
+1/17/17
+
+kafka training day 1
+====================
+
+more developer side than operations
+
+apps develeopment with kafka
+java api especially
+stream api
+
+stateful data processing
+
+developed at linkedin in 2010.
+confluent distro of kafka
+
+apache kafka            confluent kafka
+----------------------------------------
+core
+streams
+
+0.8   new producer api  1.0.0
+0.9   new consumer api  2.0.0
+0.10  stream api        3.0.0 *lab use
+0.10.1                  3.1.1
+
+rest server
+schema registration server
+client libraries (c/c++, python, go)
+connectors (jdbc, es, hdfs)
+
+confluent control center (c3)
+
+background: elastic.io, horton works
+
+client side
+think client -- rest api
+p/c native clients
+scala/jvm
+
+decoupling
+messages -- k/v pairs
+max 1MB
+smaller mesage sizes
+
+messages  -- row/records
+topic groups message -- rdbms tables
+
+key -- optional
+no user defined headers -- put in key or value
+
+keys can be multiple topics
+1 partition 1 replica
+
+producers
+---------
+
+kafka client lib + business logic
+
+serializer --> byte arrays
+keys decides --> which partition
+null --> round robin to any partition in topic
+
+hash partitioning:
+partition no = hash(key) % total no of partitions
+
+partitions --> single broker
+
+cluster metadata --> controller
+
+general: 1 broker proces per machine
+
+commit log
+
+large int 200 years for 1ns/message
+
+consumer independent vs consumer group
+puller based architecture
+scale out consumer group
+
+keep messages regardless of consumer
+separate of consumtpion
+
+central data hub:
+  real time
+  batch processing
+
+special topic 0.9 
+
+cluster state --> zookeeper
+==> brokers remain stateless
+
+leader election
+haddoop
+z node
+
+5-node zookeeper
+separate from brokers
+
+end client need not connect to zookeeper
+
+fs page cache to hold recently-used data.
+
+batch system blows out system cache for real time..
+
+sendfile() --> zero copy trainsfer
+file channel --> socket
+happends in kernel space
+ssl not. en/decryption happends in user space.
+
+timeindex --> (offset)index --> physical offet
+
+max segment size 1g
+
+pm.
+
+group.id
+no multiple consumers read from same partition.
+each mesage only consumed by 1 consumer.
+
+can only increase no of partitions. no decrease.
+==> create a new topic
+comsume from old partitions
+data evenly distributed in new partitions
+
+follower consumes from leader
+controller
+
+broker_list initial connection
+not actually p/c operations
+
+strong consistency
+
+balance of leaders and followers
+
+controller: detect failurs & choose new leader
+
+partition replicas --> leader failure
+
+acks = 0
+acks = 1    leader
+acks = all  consumer as well
+
+preferred replica
+
+byte wise copy
+
+followers ask for a particular offset
+leader knows what message to give to follower
+consumer next request --> last message
+
+leader maintains ISR list (In Sync Replicas)
+
+min.insync.replicas = 1
+acks = all
+
+isr list --> zookeeper
+
+message duplication unavoidable today
+--> at least once. not exactly once.
+no matter how many acks.
+
+1st replica is preferred replica
+preferred replica --> leader
+
+recovery-point-offset-checkpoint
+
+jmx metrics --> graphite
+
+duplicate messages ==> new leader elect
+soft failures 
+
+delete entire segment
+
+0.10.1 spill maps to disk
+
+maven confluent
+java
+
+producer
+--------
+
+kafkaproducer class
+
+snappy, l2z - fast
+gzip        - small
+
+no duplicates:
+max.request.per_connection=1
+retries=600
+
+latency:
+batch.size=16kb
+linger.ms=0
+
+for throughput increase both.
+
+1/18/17
+
+kafka training day 2
+====================
+zookeeper bottleneck for large deployment
+
+manage message offsets externally
+
+always have group.id. even just 1 consumer.
+
+deserialize at client side
+
+max.fetch.bytes=1M
+if larger, consumer hangs.
+
+consumer
+session.timeout.ms=30000
+heartbeat.timeout.ms=3000
+
+try finally, consumer.closer();
+
+rejoin consumer group
+
+failed consumer
+  reassgined to another consumer
+
+kafka consumer NOT thread safe
+producer is.
+
+poll() --> blocks
+=> seperate thread.
+
+run as java app
+from end of log of partition.
+
+CLIENT_ID_CONFIG
+
+run multible jvms
+
+runnable
+
+poll indefinitly
+  as soon as messages available, return
+
+poll commit automatically
+auto.offset.rest=lastest/earliest
+
+seek (TopicPartition, Offset)
+0.10.1 time based seek
+
+consumer.assignments()
+
+Poll:
+  1. retrieves messages
+  2. heartbeats
+  3. retrieving partition assignments
+  4. auto commit offsets
+  5. execute rebalancing operations
+
+pause(), resume()
+
+reblance
+  topic side increase partitions
+  consumer num. changes
+  redistribution partition assignments evenly accross available consumers
+
+group coordinator
+  gnerate assignments
+  send assignments to cosumers
+leadre for consumer group
+
+[topic, partition, group_id]
+
+group coordinator writes to __consumer_offsets topic
+
+consumer partition skew
+
+one message at time
+at most one dumplicate message
+
+store consumer offsets at database
+rmdbs
+  update table
+  updata offset
+  ==> exactly once
+
+offset mgmt
+commit offset to external file
+
+round robin partition: stateless processing
+hash based  stateful
+
+partitioner.class
+message value instead of message key
+
+producer throughput
+  acks when mgmt ack
+  when message commmited, ie. available to consume
+
+kip: kafka improvment proposal
+
+range assignment
+
+partitioner plugin
+
+schema mgmt
+avro, data with changing schema
+
+kafka own not use java seraialzier
+
+self-describing schema
+
+Seariliztion frameworks:
+Avro    - kafka/hadoop
+Thrift  - Facebook
+Protobufs - Google
+kryo
+
+averao plugin
+src/main/avro
+
+"doc": "comment"
+
+schema evolutions
+preserver compatibility
+backwd/fwd
+
+serizlied avro data
+a json attached to it
+
+schema repo fail?
+
+meta data repository
+
+run as 
+maven generate serials
+
+run as 
+program arguments
+
+
+1/19/17
+kafka training day 3
+
+kafka avro
+public fields  defpricaated
+need private fields
+container for data code generated from schema
+
+console-avero
+
+connect
+core framework
+opensource
+connectors from confluent
+
+worker  jvm
+tasks   threads
+
+connector not ETL, kafka streams
+simply copy system
+
+stream data movement
+not scheduled job or one time
+
+stand along mode
+file system local access
+agent mode
+
+source  -> connect    --> kafka
+kafka   -> connector  --> sink
+
+same as consumer group
+
+generally close to des. i.e. kafka
+fs close to source
+
+kafka --> hdfs from diff dc. 
+close to kafka
+
+mirrormaker 
+kafka2kafka copy
+enhanced: conflent replicator
+  also copies metadata. e.g. same no of partitions
+  fautl tolerance of connect
+  not offset use time index
+
+distributed mode configure from rest api
+
+connector jar
+
+connector configration not coding
+
+offset standalone: local fs
+distributed: kafka topic
+
+builtin
+json converter
+avro converter
+
+jdbc parallel at table level
+table -- topic
+custom query
+bulk mode
+
+hdf sink
+hive
+  auto crate table
+  schema evolution/avro
+  default partitioned by kafka partitions
+
+parquet/avero
+pluggable partitioner
+
+exactly once delivery
+hive meta store
+production quality
+
+under spcificl sql engine more efficent
+
+flume not as fault-tolerant to connect
+out of box func matuality
+
+no general api for administragive tasks
+kpi-4
+
+kafka-configs
+
+topic level
+broker level
+  modify property files
+  bounce broker
+
+message schement includes compress type
+consumer no need to specify
+
+kafka-reassginment parttions
+adb automated data balancer
+
+blance no of partitions not size of partitions
+
+streams
+client side framework to embed in application
+dsl and lower processing api
+
+spark streaming, storm, samza
+not require own cluster
+
+a lib not framework
+
+stream processing
+happens in moemenry
+
+input kafka topic
+output kafka topic
+
+kafka connect + stream api
+
+kstream- stream of inserts. stateless
+ktable - stream of updates. stateful. change log. many messages together.
+
+window- time buckets
+tumpling window
+hopping window
+
+join 2 streams
+need window data
+
+statestore replicated to a kafak topic
+
+kafka streams require zk access
+  it creates topics..
+  merged commit. no need in the future
+
+serdes
+stateless filter map mapVlaues
+
+clean up stream not easy
+autocrate topic disabled?
+
+continuously updating table.
+
+each data store one internal kafka topic
+
+tostream() not needed. same data binary.
+
+docs
+apache  ref
+confluent book
+
+docker images on confluent
+  works on mac
+
+metrics for stream topo?
+no. next release.
+connect?
+
+rest proxy, schema registry
+run mulitple instances behind lb or vip
+
+/etc/kafka/server.properties
+
+more partitions than bokers
+
+partitions:
+2000-4000 / broker
+10k / cluster
+network bound
+
+quured max.rquests = max no clients/broker
+
+controlled shutdown no crc validation
+
+raid for kafka
+max.consumer.per.ip
+exception
+
+not optimal for large messages
+
+broker.rack
+replicas will be placed on diff rack
+
+RUOK
+imok
+
+share zk w other system. no
+single zk for multiple kafka. ok
+
+light use of zk
+
+open file handlers
+histogram
+timers
+
+reporting mechanism
+jmx, ganglia
+
+campture jmx -- > graphite
+
+gauge: single value at time
+meter: accumulated
+
+zero copy on consumers ide
+
+keystore.passwd = plain text
+
+authorzation acls
+
+principle name
+
+acls stored in zk
+acls chached at broker async
+
+zk:
+  kafka metadata
+  acls
+
+authrization log
+
+
+
+[training@confluent-training-vm ~]$ echo -e "log line 1\nlog line 2" > test.txt
+[training@confluent-training-vm ~]$ cat test.txt
+log line 1
+log line 2
+[training@confluent-training-vm ~]$ connect-standalone /etc/kafka/connect-standalone.properties  /etc/kafka/connect-file-source.properties
+
+[training@confluent-training-vm ~]$ kafka-console-consumer --bootstrap-server broker1:9092  --from-beginning --topic connect-test  --new-consumer
+{"schema":{"type":"string","optional":false},"payload":"log line 1"}
+{"schema":{"type":"string","optional":false},"payload":"log line 2"}
+
+[training@confluent-training-vm ~]$ connect-standalone /etc/kafka/connect-standalone.properties  /etc/kafka/connect-file-source.properties  /etc/kafka/connect-file-sink.properties
+
+# rest api
+[training@confluent-training-vm ~]$ connect-standalone /etc/kafka/connect-standalone.properties /etc/kafka/connect-file-source.properties /etc/kafka/connect-file-sink.properties
+
+[training@confluent-training-vm ~]$ curl http://localhost:8083/connectors
+["local-file-source","local-file-sink"]
+
+$ curl http://localhost:8083/connectors/local-file-sink/config
+{"connector.class":"FileStreamSink","file":"test.sink.txt","tasks.max":"1","topics":"connect-test","name":"local-file-sink"}
+
+[training@confluent-training-vm ~]$ curl http://localhost:8083/connectors/local-file-sink/config > local-file-sink.config.json
+
+[training@confluent-training-vm ~]$ curl -X PUT http://localhost:8083/connectors/local-file-sink/config  -d @local-file-sink.config.json  --header "Content-Type: application/json"
+
+{"name":"local-file-sink","config":{"connector.class":"FileStreamSink","file":"test-new.sink.txt","tasks.max":"1","topics":"connect-test","name":"local-file-sink"},"tasks":[{"connector":"local-file-sink","task":0}]}
+
+changes in file not work.. need reset the offset..
+
